@@ -1,11 +1,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-
-
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
 st.set_page_config(
     page_title="Interactive Streamlit Dashboard",
-    page_icon="🚀",
     layout="wide"
 )
 
@@ -55,22 +57,15 @@ st.markdown("""
 # ------------------ HEADER ------------------
 st.markdown("""
 <div class="fade-in">
-    <h1 style="text-align:center;">🚀 Streamlit Interactive Dashboard</h1>
+    <h1 style="text-align:center;">Streamlit Interactive Dashboard</h1>
     <p style="text-align:center;">Beautiful • Animated • Interactive</p>
 </div>
 """, unsafe_allow_html=True)
 
 
-name = st.text_input("👤 What is your name?")
-if name:
-    st.success(f"Hello {name} 👋")
-st.markdown('</div>', unsafe_allow_html=True)
 
 # Button
 st.button("Simple Button", type="primary")
-
-if st.button("Click me!"):
-    st.write("You clicked me!")
 
 # Checkbox
 if st.checkbox('Show dataframe'):
@@ -126,19 +121,117 @@ xd = st.text_input('plaese write your file name: ')
 # Container Layout
 container = st.container(border=True)
 container.write(f"This is a file name : {xd}")
-st.write("This is outside the container")
 
 container.write(f"This is a information about flie name : {xd}")
 
+
+
 # อัพโหลดไฟล์
-file = st.file_uploader("Upload a CSV")
+file = st.file_uploader("Upload a CSV For Preview a file")
 
 # สามารถเขียนโค้ดเพื่อ extract ข้อมูลออกมาได้
-if (file):
+if file:
     df = pd.read_csv(file)
-    st.write(df)
-    df = df[['age', 'major', 'year']]
-    st.bar_chart(df, x='year', y='age', color='major', stack=False)
+    st.dataframe(df, use_container_width=True)
+
+    if set(['age','major','year']).issubset(df.columns):
+        st.bar_chart(df, x='year', y='age', color='major', stack=False)
+
+st.header("🤖 Train Linear Regression from Uploaded CSV")
+
+# ------------------ Upload CSV ------------------
+
+
+
+
+# ------------------ Helper ------------------
+def remove_outliers_iqr(df):
+    Q1 = df.quantile(0.25)
+    Q3 = df.quantile(0.75)
+    IQR = Q3 - Q1
+    return df[~((df < (Q1 - 1.5 * IQR)) | 
+                (df > (Q3 + 1.5 * IQR))).any(axis=1)]
+
+# ------------------ Upload ------------------
+file = st.file_uploader("📂 Upload ANY CSV", type=["csv"])
+
+if file:
+    df = pd.read_csv(file)
+    st.subheader("📄 Raw Data")
+    st.dataframe(df, use_container_width=True)
+
+    # ------------------ Numeric only ------------------
+    df = df.select_dtypes(include=np.number)
+
+    if df.shape[1] < 2:
+        st.error("❌ Need at least 2 numeric columns")
+        st.stop()
+
+    # ------------------ Cleaning options ------------------
+    st.subheader("🧹 Data Cleaning Options")
+    remove_outlier = st.checkbox("Remove outliers (IQR)", value=True)
+    use_log = st.checkbox("Log transform target")
+
+    df = df.dropna()
+    if remove_outlier:
+        df = remove_outliers_iqr(df)
+
+    st.success(f"✅ Cleaned samples: {len(df)}")
+
+    # ------------------ Target ------------------
+    target = st.selectbox("🎯 Select Target (Y)", df.columns)
+    features = [c for c in df.columns if c != target]
+
+    X = df[features]
+    y = df[target]
+
+    if use_log:
+        y = np.log1p(y)
+
+    # ------------------ Train ------------------
+    if st.button("🚀 Train Model"):
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.2, random_state=42
+        )
+
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        # ------------------ Metrics ------------------
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+
+        col1, col2 = st.columns(2)
+        col1.metric("📉 MSE", f"{mse:.4f}")
+        col2.metric("📈 R²", f"{r2:.4f}")
+
+        # ------------------ Plot ------------------
+        st.subheader("📊 Predicted vs Actual")
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.scatter(y_test, y_pred, alpha=0.7)
+        ax.plot(
+            [y_test.min(), y_test.max()],
+            [y_test.min(), y_test.max()],
+            '--'
+        )
+        ax.set_xlabel("Actual")
+        ax.set_ylabel("Predicted")
+        ax.grid(True)
+        st.pyplot(fig)
+
+        # ------------------ Coef ------------------
+        st.subheader("🧮 Model Coefficients")
+        coef_df = pd.DataFrame({
+            "Feature": features,
+            "Coefficient": model.coef_
+        }).sort_values("Coefficient", key=abs, ascending=False)
+
+        st.dataframe(coef_df, use_container_width=True)
 
 st.markdown("""
 <hr>
