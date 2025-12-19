@@ -101,11 +101,11 @@ st.line_chart(df)
 # Column Layout
 col1, col2, col3 = st.columns(3)
 
-col1.header("Debian")
+col1.header("BAR CHART")
 
-col2.header("Fedora")
+col2.header("LINE CHART")
 
-col3.header("Kali")
+col3.header("AREA CHART")
 
 
 # หรือใช้กับคำว่า "with" ได้
